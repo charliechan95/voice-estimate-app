@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>語音報價 · Voice Estimate</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .tabs button { border: 1px solid transparent; background: transparent; color: #d8d2c4; }
+  .tabs button.active { background: #3a322a; color: #fff; }
+  .view { display: none; }
+  .view.active { display: block; }
+  .row-actions { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+  .row-actions button { padding: 0.3rem 0.6rem; font-size: 0.85rem; }
+  .pill { display: inline-block; border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.8rem; }
+  .pill-review { background: #fdf3d7; color: #8a6d00; }
+  .pill-ok { background: #ddf0e5; color: #1e7a4f; }
+  .pill-sample { background: #e3ecf7; color: #2a5a8a; }
+  .frm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.7rem; max-width: 900px; }
+  .frm-grid label { display: block; font-size: 0.9rem; }
+  .frm-grid input, .frm-grid select, .frm-grid textarea { width: 100%; margin-top: 0.25rem; }
+  .voice-panel { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 1rem; margin: 1rem 0; max-width: 900px; }
+  .voice-controls { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.7rem; }
+  .rec-dot { display: inline-block; width: 0.7em; height: 0.7em; border-radius: 50%; background: #b3261e; margin-right: 0.4em; animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: 0.2; } }
+  #dictation { width: 100%; min-height: 90px; }
+  .candidate { border: 1px dashed #c9a227; border-radius: 8px; padding: 0.6rem; margin: 0.5rem 0; background: #fffdf5; }
+  .candidate .muted { font-size: 0.85rem; }
+  .unmatched { background: #f6f6f6; border-radius: 8px; padding: 0.6rem; margin: 0.5rem 0; font-size: 0.9rem; }
+  .qty-input, .price-input { width: 5.5em; }
+  .totals { max-width: 420px; margin-left: auto; }
+  .totals .trow { display: flex; justify-content: space-between; padding: 0.35rem 0; border-bottom: 1px solid var(--line); }
+  .totals .grand { font-size: 1.3rem; font-weight: 700; }
+  pre.quote { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 1rem; white-space: pre-wrap; max-width: 900px; }
+  .needs-fill { background: #fff3cd; }
+  #frm-settings label { display: block; margin-bottom: 0.8rem; max-width: 560px; }
+  #frm-settings input, #frm-settings textarea { width: 100%; margin-top: 0.25rem; }
+  .sample-note { background: #e3ecf7; border-radius: 8px; padding: 0.7rem 1rem; margin: 0.8rem 0; max-width: 900px; font-size: 0.9rem; }
+  dialog { width: min(560px, 94vw); }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🎙️ 語音報價</div>
+  <nav class="tabs">
+    <button data-tab="quote" class="active">報價單</button>
+    <button data-tab="pricebook">價目表</button>
+    <button data-tab="history">歷史</button>
+    <button data-tab="settings">設定</button>
+  </nav>
+</header>
+<main class="container">
+
+  <!-- Quote builder -->
+  <section id="view-quote" class="view active">
+    <h1>開報價單 <span class="muted" style="font-size:0.8rem">New estimate</span></h1>
+
+    <div class="frm-grid">
+      <label>客戶名稱 Client
+        <input id="q-client" placeholder="例如：陳生"></label>
+      <label>工程地址 Site
+        <input id="q-site" placeholder="例如：太古城xx座xx室"></label>
+      <label>日期 Date
+        <input id="q-date" type="date"></label>
+      <label>折扣 % Discount
+        <input id="q-discount" type="number" min="0" max="100" step="0.5" value="0"></label>
+    </div>
+
+    <div class="voice-panel">
+      <h2 style="margin-top:0">🎙️ 語音輸入 <span class="muted">Voice dictation</span></h2>
+      <div class="voice-controls">
+        <select id="v-lang" aria-label="辨識語言">
+          <option value="yue-Hant-HK">廣東話 (粵語·香港)</option>
+          <option value="zh-HK">中文 (香港)</option>
+        </select>
+        <button id="btn-record" class="primary">● 開始講嘢</button>
+        <span id="rec-status" class="muted"></span>
+      </div>
+      <div id="voice-unsupported" class="muted" style="display:none">
+        ⚠️ 呢個瀏覽器唔支援語音輸入（例如 Safari）。唔緊要 — 下面照樣可以手打，功能一樣齊。
+      </div>
+      <textarea id="dictation" placeholder="講完會自動轉做文字…亦可以直接喺度打字"></textarea>
+      <div class="voice-controls" style="margin-top:0.5rem">
+        <button id="btn-parse">⚙️ 由文字產生項目</button>
+        <button id="btn-clear-dict">清空</button>
+      </div>
+      <div id="parse-results"></div>
+    </div>
+
+    <section>
+      <h2>報價項目 <span class="muted">Line items</span></h2>
+      <div class="toolbar">
+        <button id="btn-add-row" class="primary">+ 手動加項目</button>
+        <span class="muted" id="row-hint"></span>
+      </div>
+      <table class="tbl">
+        <thead><tr>
+          <th>項目</th><th>說明</th><th>數量</th><th>單位</th>
+          <th>單價 (HKD)</th><th>小計</th><th></th>
+        </tr></thead>
+        <tbody id="quote-rows"></tbody>
+      </table>
+    </section>
+
+    <section class="totals">
+      <div class="trow"><span>小計 Subtotal</span><strong id="t-sub">$0</strong></div>
+      <div class="trow"><span>折扣 Discount</span><strong id="t-disc">0%</strong></div>
+      <div class="trow grand"><span>總計 Total</span><strong id="t-total">$0</strong></div>
+    </section>
+
+    <section>
+      <h2>報價內容 <span class="muted">Quote text</span></h2>
+      <div class="toolbar">
+        <button id="btn-save-est" class="primary">💾 儲存報價</button>
+        <button id="btn-copy">📋 複製文字</button>
+        <button id="btn-wa">💬 WhatsApp 傳送</button>
+        <button id="btn-new-est">🆕 新報價</button>
+      </div>
+      <label>備註 Notes
+        <input id="q-notes" style="width:100%;max-width:900px" placeholder="例如：不包清拆後垃圾車費"></label>
+      <pre class="quote" id="quote-preview"></pre>
+    </section>
+  </section>
+
+  <!-- Price book -->
+  <section id="view-pricebook" class="view">
+    <h1>價目表 <span class="muted" style="font-size:0.8rem">Price book</span></h1>
+    <div class="sample-note">
+      ⚠️ <strong>樣本價錢：</strong>下面標住「樣本」嘅價錢只係方便試用嘅例子，
+      唔係真實市價。請改成你自己嘅價錢先好用嚟報價。
+      <span class="muted">Sample prices are placeholders — set your own before quoting.</span>
+    </div>
+    <div class="toolbar">
+      <button id="btn-new-item" class="primary">+ 新增項目</button>
+    </div>
+    <table class="tbl">
+      <thead><tr>
+        <th>項目</th><th>別名 (語音配對用)</th><th>單位</th>
+        <th>預設單價 (HKD)</th><th></th>
+      </tr></thead>
+      <tbody id="item-rows"></tbody>
+    </table>
+  </section>
+
+  <!-- History -->
+  <section id="view-history" class="view">
+    <h1>歷史報價 <span class="muted" style="font-size:0.8rem">History</span></h1>
+    <div class="toolbar">
+      <div class="search">
+        <input type="text" id="h-q" placeholder="搜尋客戶 / 地址…">
+        <button id="h-apply">搜尋</button>
+      </div>
+    </div>
+    <table class="tbl">
+      <thead><tr>
+        <th>客戶</th><th>地址</th><th>日期</th><th>總計</th><th></th>
+      </tr></thead>
+      <tbody id="hist-rows"></tbody>
+    </table>
+  </section>
+
+  <!-- Settings -->
+  <section id="view-settings" class="view">
+    <h1>設定 <span class="muted" style="font-size:0.8rem">Settings</span></h1>
+    <form id="frm-settings">
+      <label>公司 / 師傅名稱 Contractor name
+        <input name="contractor_name" id="s-name" placeholder="例如：昌哥裝修"></label>
+      <label>電話 Phone
+        <input name="phone" id="s-phone" placeholder="例如：91234567"></label>
+      <label>預設報價備註 Default quote notes
+        <textarea name="quote_notes" id="s-notes" rows="3"></textarea>
+        <div class="muted">會自動加喺每張報價單尾。</div>
+      </label>
+      <button type="submit" class="primary">儲存設定</button>
+      <span id="settings-saved" class="muted"></span>
+    </form>
+  </section>
+
+</main>
+
+<dialog id="dlg-item">
+  <form method="dialog" id="frm-item">
+    <h2 id="dlg-item-title">新增項目</h2>
+    <label>項目名稱 <input name="name" required placeholder="例如：水電安裝"></label>
+    <label>單位 <input name="unit" value="項" placeholder="平方呎 / 呎 / 個 / 項…"></label>
+    <label>預設單價 (HKD) <input name="default_price" type="number" min="0" step="0.01" value="0"></label>
+    <label>別名 (語音配對用，以逗號分隔)
+      <input name="aliases" placeholder="例如：水電,水電安裝"></label>
+    <div class="dlg-actions">
+      <button type="submit" class="primary">儲存</button>
+      <button type="button" id="btn-cancel-item">取消</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="db.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

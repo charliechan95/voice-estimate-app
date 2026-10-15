@@ -274,6 +274,16 @@ return n;
 today() {
 return new Date().toISOString().slice(0, 10);
 },
+/* UI language for the generated quote text only (localStorage "vea_lang",
+default zh). The Cantonese parser, price matching and stored data never
+change with the UI language. */
+_lang() {
+try {
+return localStorage.getItem("vea_lang") === "en"? "en": "zh";
+} catch {
+return "zh";
+}
+},
 
 _seedItems() {
 if (localStorage.getItem("ve_items") === null) {
@@ -431,6 +441,7 @@ try { localStorage.removeItem("ve_draft");} catch { /* noop */}
 
 // ---- Quote text ----------------------------------------------------------
 buildQuoteText(est) {
+if (this._lang() === "en") return this.buildQuoteTextEn(est);
 const s = this.settings();
 const t = this.totals(est);
 const lines = [];
@@ -454,6 +465,34 @@ if (t.discount_pct > 0) lines.push("折扣：" + t.discount_pct + "%");
 lines.push("總計：$" + t.total.toLocaleString("en-HK") + " " + (s.currency || "HKD"));
 if (est.notes) lines.push("備註：" + est.notes);
 else if (s.quote_notes) lines.push("備註：" + s.quote_notes);
+return lines.join("\n");
+},
+/* English rendering of the estimate document. Line-item names come from the
+contractor's own typing/speech and stay exactly as stored. */
+buildQuoteTextEn(est) {
+const s = this.settings();
+const t = this.totals(est);
+const lines = [];
+lines.push("Quotation");
+if (s.contractor_name) lines.push(s.contractor_name + (s.phone? " " + s.phone: ""));
+lines.push("Client: " + (est.client_name || "—"));
+if (est.site_address) lines.push("Site: " + est.site_address);
+lines.push("Date: " + (est.est_date || ""));
+lines.push("--------------------------------");
+(est.rows || []).forEach((r, i) => {
+const rt = this.rowTotal(r);
+lines.push((i + 1) + ". " + (r.item_name || "Item") +
+" " + (r.qty || 0) + " " + (r.unit || "") +
+" @ $" + (r.unit_price === null || r.unit_price === ""? "—": r.unit_price) +
+" = $" + rt.toLocaleString("en-HK"));
+if (r.description) lines.push(" " + r.description);
+});
+lines.push("--------------------------------");
+lines.push("Subtotal: $" + t.subtotal.toLocaleString("en-HK"));
+if (t.discount_pct > 0) lines.push("Discount: " + t.discount_pct + "%");
+lines.push("Total: $" + t.total.toLocaleString("en-HK") + " " + (s.currency || "HKD"));
+if (est.notes) lines.push("Notes: " + est.notes);
+else if (s.quote_notes) lines.push("Notes: " + s.quote_notes);
 return lines.join("\n");
 },
 whatsappLink(est) {

@@ -38,10 +38,10 @@ function persistDraft() {
 function renderAll() {
   syncHeaderFromInputs();
   renderQuoteRows();
-  const t = DB.totals(cur);
-  document.getElementById("t-sub").textContent = "$" + t.subtotal.toLocaleString("en-HK");
-  document.getElementById("t-disc").textContent = t.discount_pct + "%";
-  document.getElementById("t-total").textContent = "$" + t.total.toLocaleString("en-HK");
+  const tot = DB.totals(cur);
+  document.getElementById("t-sub").textContent = "$" + tot.subtotal.toLocaleString("en-HK");
+  document.getElementById("t-disc").textContent = tot.discount_pct + "%";
+  document.getElementById("t-total").textContent = "$" + tot.total.toLocaleString("en-HK");
   document.getElementById("quote-preview").textContent = DB.buildQuoteText(cur);
   const missing = cur.rows.filter((r) =>
     r.unit_price === null || r.unit_price === "" || isNaN(parseFloat(r.unit_price)));
@@ -359,12 +359,12 @@ function renderHistory() {
   const list = DB.listEstimates(histQ);
   document.getElementById("hist-rows").innerHTML = list.length
     ? list.map((e) => {
-        const t = DB.totals(e);
+        const tot = DB.totals(e);
         return `<tr>
           <td><strong>${esc(e.client_name || "—")}</strong></td>
           <td class="muted">${esc(e.site_address || "")}</td>
           <td>${esc(e.est_date || "")}</td>
-          <td>$${t.total.toLocaleString("en-HK")}</td>
+          <td>$${tot.total.toLocaleString("en-HK")}</td>
           <td><div class="row-actions">
             <button data-openest="${e.id}">${t("btn_open")}</button>
             <button data-dupest="${e.id}">${t("btn_dup")}</button>

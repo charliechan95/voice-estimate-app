@@ -48,6 +48,7 @@
 <body>
 <header class="topbar">
   <div class="brand" data-i18n="brand">🎙️ 語音報價</div>
+  <span id="storage-warn" class="pill pill-review" style="display:none;margin-left:0.6rem" data-i18n="storage_warn">⚠️ 儲存空間已滿 — 而家嘅更改儲存唔到，重新整理後會唔見。</span>
   <nav class="tabs">
     <button data-tab="quote" class="active" data-i18n="tab_quote">報價單</button>
     <button data-tab="pricebook" data-i18n="tab_pricebook">價目表</button>
@@ -183,6 +184,17 @@
       <button type="submit" class="primary" data-i18n="btn_save_settings">儲存設定</button>
       <span id="settings-saved" class="muted"></span>
     </form>
+
+    <section style="margin-top:1.6rem">
+      <h2><span data-i18n="backup_title">備份與還原</span> <span class="muted" style="font-size:0.8rem" data-i18n="backup_title_sub">Backup &amp; restore</span></h2>
+      <p class="muted" data-i18n="backup_note">備份包含價目表、歷史報價、設定同未儲存嘅草稿，匯出成一個 JSON 檔；匯入會覆寫現有資料。</p>
+      <div class="toolbar">
+        <button id="btn-export" data-i18n="btn_export">⬇ 匯出備份</button>
+        <button id="btn-import" data-i18n="btn_import">⬆ 匯入備份</button>
+        <input type="file" id="file-import" accept="application/json,.json" hidden>
+      </div>
+      <span id="backup-status" class="muted"></span>
+    </section>
   </section>
 
 </main>

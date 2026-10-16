@@ -186,7 +186,18 @@ if (row.qty === null) row.qty = 1;
 const lump = this.findLumpSum(clause);
 if (lump!== null) {
 if (row.qty!== null && row.qty > 1) {
-row.unit_price = Math.round((lump / row.qty) * 100) / 100;
+// Uneven-split fix: the lump sum must come back to the cent from the
+// rounded line total. Take the per-unit share rounded to cents, then fold
+// the residual cents into the unit price so qty x unit_price == lump.
+const lumpCents = Math.round(lump * 100);
+const base = Math.round(lumpCents / row.qty) / 100;
+const diffCents = lumpCents - Math.round(base * row.qty * 100);
+let up = base + diffCents / 100 / row.qty;
+// Trim the float tail for display (4dp) only when the rounded line total
+// still recovers the lump sum exactly.
+const up4 = Math.round(up * 10000) / 10000;
+if (Math.round(up4 * row.qty * 100) === lumpCents) up = up4;
+row.unit_price = up;
 } else {
 row.qty = 1;
 row.unit_price = lump;
@@ -264,7 +275,23 @@ return fallback;
 }
 },
 _write(key, value) {
+try {
 localStorage.setItem(key, JSON.stringify(value));
+} catch (err) {
+this._writeError(err);
+}
+},
+/* Writes can fail (QuotaExceededError, private-mode SecurityError).
+persistDraft runs on every keystroke, so a failure must never crash the
+UI: warn once, non-blocking, via the header indicator. */
+_writeError(err) {
+if (this._writeWarned) return;
+this._writeWarned = true;
+try {
+const el = document.getElementById("storage-warn");
+if (el) el.style.display = "";
+} catch {
+}
 },
 _nextId(key) {
 const n = (parseInt(localStorage.getItem(key) || "0", 10) || 0) + 1;

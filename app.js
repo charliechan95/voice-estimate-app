@@ -311,9 +311,13 @@ document.getElementById("item-rows").addEventListener("click", (e) => {
     editingItemId = it.id;
     document.getElementById("dlg-item-title").textContent = t("dlg_edit_item");
     const f = document.getElementById("frm-item");
-    f.name.value = it.name; f.unit.value = it.unit;
-    f.default_price.value = it.default_price;
-    f.aliases.value = (it.aliases || []).join(",");
+    // NOTE: f.name would hit HTMLFormElement.name (the form's own name),
+    // shadowing <input name="name"> — always reach controls explicitly.
+    const fld = (n) => f.querySelector('[name="' + n + '"]');
+    fld("name").value = it.name;
+    fld("unit").value = it.unit;
+    fld("default_price").value = it.default_price;
+    fld("aliases").value = (it.aliases || []).join(",");
     document.getElementById("dlg-item").showModal();
   } else if (del !== undefined) {
     if (confirm(t("confirm_del_item"))) { DB.deleteItem(del); renderItems(); }
@@ -331,12 +335,14 @@ document.getElementById("btn-cancel-item").addEventListener("click", () => {
 });
 document.getElementById("frm-item").addEventListener("submit", (e) => {
   e.preventDefault();
-  const f = e.target;
+  // FormData, like the settings form below — f.name would hit the form's
+  // own HTMLFormElement.name and throw.
+  const f = new FormData(e.target);
   const data = {
-    name: f.name.value.trim(),
-    unit: f.unit.value.trim() || "項",
-    default_price: parseFloat(f.default_price.value) || 0,
-    aliases: f.aliases.value,
+    name: String(f.get("name") || "").trim(),
+    unit: String(f.get("unit") || "").trim() || "項",
+    default_price: parseFloat(f.get("default_price")) || 0,
+    aliases: String(f.get("aliases") || ""),
   };
   try {
     if (editingItemId) DB.updateItem(editingItemId, data);
@@ -415,6 +421,112 @@ document.getElementById("frm-settings").addEventListener("submit", (e) => {
   done.textContent = t("saved");
   setTimeout(() => { done.textContent = ""; }, 2000);
   renderAll();
+});
+
+/* ---- Backup: export / import ------------------------------------------------- */
+const BACKUP_KEYS = ["ve_items", "ve_estimates", "ve_settings", "ve_draft",
+  "vea_lang", "ve_seq", "ve_eseq"]; // seq counters keep restored ids collision-free
+
+function backupStatus(msg) {
+  document.getElementById("backup-status").textContent = msg;
+}
+
+document.getElementById("btn-export").addEventListener("click", () => {
+  const store = {};
+  for (const k of BACKUP_KEYS) {
+    try { store[k] = localStorage.getItem(k); }
+    catch { store[k] = null; }
+  }
+  const payload = {
+    app: "voice-estimate-app",
+    version: 1,
+    exported_at: new Date().toISOString(),
+    store,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)],
+    { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "voice-estimate-backup-" +
+    new Date().toISOString().slice(0, 10) + ".json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  backupStatus(t("exported"));
+});
+
+/* Validate a parsed backup WITHOUT touching storage. Returns an i18n key
+   for the failure, or null when the backup is safe to restore. */
+const BACKUP_JSON_KEYS = ["ve_items", "ve_estimates", "ve_settings", "ve_draft"];
+function validateBackup(data) {
+  if (!data || typeof data !== "object" || data.app !== "voice-estimate-app" ||
+      !data.store || typeof data.store !== "object") return "import_invalid";
+  for (const k of Object.keys(data.store)) {
+    if (!BACKUP_KEYS.includes(k)) return "import_invalid";
+  }
+  const parsed = {};
+  try {
+    for (const k of BACKUP_JSON_KEYS) {
+      const raw = data.store[k];
+      if (raw === null || raw === undefined) { parsed[k] = null; continue; }
+      if (typeof raw !== "string") return "import_invalid";
+      parsed[k] = JSON.parse(raw);
+    }
+  } catch { return "import_invalid"; }
+  const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+  if (parsed.ve_items !== null && !Array.isArray(parsed.ve_items)) return "import_invalid";
+  if (parsed.ve_estimates !== null && !Array.isArray(parsed.ve_estimates)) return "import_invalid";
+  if (parsed.ve_settings !== null && !isObj(parsed.ve_settings)) return "import_invalid";
+  if (parsed.ve_draft !== null && !isObj(parsed.ve_draft)) return "import_invalid";
+  // vea_lang / ve_seq / ve_eseq are stored as plain strings, not JSON.
+  const lang = data.store.vea_lang;
+  if (lang !== null && lang !== undefined && lang !== "zh" && lang !== "en") return "import_invalid";
+  for (const k of ["ve_seq", "ve_eseq"]) {
+    const v = data.store[k];
+    if (v !== null && v !== undefined && !/^\d+$/.test(String(v))) return "import_invalid";
+  }
+  return null;
+}
+
+function restoreBackup(data) {
+  for (const k of BACKUP_KEYS) {
+    const raw = data.store[k];
+    if (raw === null || raw === undefined) localStorage.removeItem(k);
+    else localStorage.setItem(k, raw);
+  }
+}
+
+document.getElementById("btn-import").addEventListener("click", () => {
+  document.getElementById("file-import").click();
+});
+document.getElementById("file-import").addEventListener("change", (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    let data;
+    try { data = JSON.parse(rd.result); }
+    catch { backupStatus(t("import_bad_file")); return; }
+    const bad = validateBackup(data);
+    if (bad) { backupStatus(t(bad)); return; }
+    if (!confirm(t("confirm_import"))) return;
+    try { restoreBackup(data); }
+    catch { backupStatus(t("import_write_fail")); return; }
+    backupStatus(t("imported"));
+    const lang = data.store.vea_lang;
+    if ((lang === "zh" || lang === "en") && typeof setLang === "function") {
+      try { if (lang !== LANG) setLang(lang); } catch { /* keep current */ }
+    }
+    loadSettings();
+    loadHeaderInputs();
+    renderAll();
+    renderItems();
+    renderHistory();
+  };
+  rd.onerror = () => backupStatus(t("import_bad_file"));
+  rd.readAsText(file);
 });
 
 /* ---- Init ---------------------------------------------------------------------- */

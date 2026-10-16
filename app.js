@@ -59,7 +59,7 @@ function renderQuoteRows() {
     return `<tr>
       <td><input class="name-input" data-i="${i}" value="${esc(r.item_name || "")}"
            placeholder="${t("ph_item")}" style="width:6.5em">
-        ${r.review ? '<div><span class="pill pill-review">${t("pill_review")}</span></div>' : ""}</td>
+        ${r.review ? '<div><span class="pill pill-review">' + t("pill_review") + '</span></div>' : ""}</td>
       <td><input class="desc-input" data-i="${i}" value="${esc(r.description || "")}"
            placeholder="${t("ph_desc")}"></td>
       <td><input class="qty-input" data-i="${i}" type="number" min="0" step="0.01"
@@ -292,7 +292,7 @@ function renderItems() {
   document.getElementById("item-rows").innerHTML = list.map((it) => `
     <tr>
       <td><strong>${esc(it.name)}</strong>
-        ${it.sample ? '<div><span class="pill pill-sample">${t("pill_sample")}</span></div>' : ""}</td>
+        ${it.sample ? '<div><span class="pill pill-sample">' + t("pill_sample") + '</span></div>' : ""}</td>
       <td class="muted">${esc((it.aliases || []).join("、"))}</td>
       <td>${esc(it.unit)}</td>
       <td>$${Number(it.default_price || 0).toLocaleString("en-HK")}</td>
